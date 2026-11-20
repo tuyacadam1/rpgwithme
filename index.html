@@ -26,7 +26,7 @@
       <button class="nav-btn" onclick="switchTab('students', this)"><span class="icon">👥</span>Students</button>
       <button class="nav-btn" onclick="switchTab('points', this)"><span class="icon">⭐</span>Points</button>
       <button class="nav-btn" onclick="switchTab('history', this)"><span class="icon">📊</span>E-Record</button>
-      <button class="nav-btn" onclick="switchTab('assets', this)"><span class="icon">🐉</span>RPG Studio</button>
+      <button class="nav-btn" onclick="switchTab('assets', this)"><span class="icon">🎰</span>Gacha & Mobs</button>
     </nav>
 
     <main class="main-content">
@@ -65,7 +65,7 @@
       <!-- 3. POINTS -->
       <section id="tab-points" class="tab-view hidden">
         <div class="card">
-          <h3>Award Task Points</h3>
+          <h3>Award Class Points (Used for Stats & Gacha)</h3>
           <input type="text" id="task-name" placeholder="Task Name (e.g., Quiz 1, Activity 2)">
           <div class="grid-2">
             <input type="number" id="task-points" placeholder="Points" value="10">
@@ -76,7 +76,7 @@
         </div>
       </section>
 
-      <!-- 4. E-CLASS RECORD (MATRIX) -->
+      <!-- 4. E-CLASS RECORD -->
       <section id="tab-history" class="tab-view hidden">
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -88,40 +88,61 @@
         </div>
       </section>
 
-      <!-- 5. RPG STUDIO (UPLOAD MOBS, BOSSES & CHARACTER DESIGNS) -->
+      <!-- 5. GACHA CHARACTERS & TOWER MOBS UPLOADER -->
       <section id="tab-assets" class="tab-view hidden">
         <div class="card">
-          <h3>🎨 Upload Tower Mobs, Bosses & Hero Designs</h3>
-          <p style="font-size:11px; color:var(--muted); margin-bottom:10px;">Upload transparent PNGs from your device. Images are auto-compressed so students load instantly!</p>
+          <h3>🎰 Upload Gacha Characters & Tower Mobs</h3>
+          <p style="font-size:11px; color:var(--muted); margin-bottom:10px;">Supports single images OR multi-row sprite sheets (e.g. 6 cols × 3 rows for Idle/Attack animations).</p>
           
           <select id="asset-type" onchange="toggleAssetFields()">
+            <option value="character">Gacha Character (Playable Hero)</option>
             <option value="mob">Tower Mob (Regular Floors)</option>
             <option value="boss">Tower Boss (Every 10th Floor)</option>
-            <option value="character">Playable Character Design</option>
           </select>
 
-          <div id="asset-gender-wrap" class="hidden">
-            <select id="asset-gender">
-              <option value="Male">Male Character Option</option>
-              <option value="Female">Female Character Option</option>
+          <div id="asset-rarity-wrap">
+            <select id="asset-rarity">
+              <option value="Common">Common (50% Gacha Rate • 1.0x Power)</option>
+              <option value="Rare">Rare (30% Gacha Rate • 1.2x Power)</option>
+              <option value="Epic">Epic (15% Gacha Rate • 1.5x Power)</option>
+              <option value="Legendary">Legendary (5% Gacha Rate • 2.0x Power)</option>
             </select>
           </div>
 
-          <div id="asset-floor-wrap">
+          <div id="asset-floor-wrap" class="hidden">
             <input type="text" id="asset-floor" placeholder="Floor Rule: 'all' or specific floor e.g. '10', '20'" value="all">
           </div>
 
-          <input type="text" id="asset-name" placeholder="Name (e.g., Forest Slime, Dragon Lord, Cyber Paladin)">
-          <input type="file" id="asset-file" accept="image/*" onchange="previewCompressedImage(event)">
-          <div id="upload-preview-box" class="hidden" style="text-align:center; margin-bottom:10px;">
-            <img id="upload-preview-img" style="width:96px; height:96px; object-fit:contain; background:#090d16; border-radius:10px; border:1px solid var(--gold);">
+          <input type="text" id="asset-name" placeholder="Name (e.g., Anti-Magic Knight, Shadow Dragon)">
+
+          <div class="grid-2">
+            <div>
+              <label style="font-size:11px; color:var(--muted);">Columns (Frames across)</label>
+              <input type="number" id="sprite-cols" value="6" min="1" max="16" onchange="updateAnimatedPreview()">
+            </div>
+            <div>
+              <label style="font-size:11px; color:var(--muted);">Rows (1=Idle, 2+=Attack)</label>
+              <input type="number" id="sprite-rows" value="3" min="1" max="8" onchange="updateAnimatedPreview()">
+            </div>
           </div>
 
-          <button class="btn btn-gold" onclick="uploadGameAsset()">Upload to Game</button>
+          <label style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:10px; cursor:pointer;">
+            <input type="checkbox" id="remove-black-bg" style="width:auto; margin:0;" checked onchange="reprocessLoadedImage()">
+            Auto-remove solid black background (for dark sprite sheets)
+          </label>
+
+          <input type="file" id="asset-file" accept="image/*" onchange="handleFileSelect(event)">
+          
+          <div id="upload-preview-box" class="hidden" style="text-align:center; margin-bottom:12px; background:#090d16; padding:12px; border-radius:10px; border:1px solid var(--gold);">
+            <div style="font-size:11px; color:var(--gold); margin-bottom:6px;">Live Idle Animation Preview (Row 1)</div>
+            <div id="animated-sprite-preview" style="width:110px; height:110px; margin:0 auto; background-repeat:no-repeat;"></div>
+          </div>
+
+          <button class="btn btn-gold" onclick="uploadGameAsset()">+ Add to Game</button>
         </div>
 
         <div class="card">
-          <h3>Uploaded Sprites (<span id="asset-count">0</span>)</h3>
+          <h3>Active Gacha Pool & Tower Mobs (<span id="asset-count">0</span>)</h3>
           <div id="asset-list"></div>
         </div>
       </section>
