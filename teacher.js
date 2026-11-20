@@ -1,8 +1,9 @@
-const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
+const API_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL";
 
 let state = {
   teacherId: '', name: '', classes: [], students: [],
-  activeClassId: '', history: [], assets: [], pendingImageBase64: ''
+  activeClassId: '', history: [], assets: [],
+  rawLoadedImg: null, pendingImageBase64: '', previewTimer: null
 };
 
 async function apiCall(payload) {
@@ -73,7 +74,7 @@ function onClassChange() {
   document.getElementById('roster-list').innerHTML = classStudents.map(s => 
     `<div style="padding:6px 0; border-bottom:1px solid #334155; display:flex; justify-content:space-between;">
       <span>${s.name} <small style="color:var(--muted)">(${s.studentId})</small></span>
-      <span>Floor ${s.floor} | Unspent: ${s.points}</span>
+      <span>Floor ${s.floor} | Pts: ${s.points}</span>
     </div>`
   ).join('');
 
@@ -139,7 +140,7 @@ async function submitBulkPoints() {
   onClassChange();
 }
 
-// --- E-CLASS RECORD SPREADSHEET ---
+// --- E-CLASS RECORD ---
 async function loadHistory() {
   if (!state.activeClassId) return;
   state.history = await apiCall({ action: 'getHistory', classId: state.activeClassId });
@@ -196,57 +197,99 @@ function renderEClassRecord() {
   container.innerHTML = html;
 }
 
-// --- FILE UPLOAD & CLIENT-SIDE SPRITE COMPRESSION ---
+// --- SPRITE SHEET PROCESSOR & LIVE ANIMATION PREVIEW ---
 function toggleAssetFields() {
   const type = document.getElementById('asset-type').value;
-  document.getElementById('asset-gender-wrap').classList.toggle('hidden', type !== 'character');
+  document.getElementById('asset-rarity-wrap').classList.toggle('hidden', type !== 'character');
   document.getElementById('asset-floor-wrap').classList.toggle('hidden', type === 'character');
 }
 
-function previewCompressedImage(event) {
+function handleFileSelect(event) {
   const file = event.target.files[0];
   if (!file) return;
-
   const reader = new FileReader();
   reader.onload = function(e) {
     const img = new Image();
     img.onload = function() {
-      // Resize to 220x220 max so sprites load in milliseconds for 50+ students
-      const canvas = document.createElement('canvas');
-      const maxDim = 220;
-      let w = img.width, h = img.height;
-      if (w > h) { if (w > maxDim) { h *= maxDim / w; w = maxDim; } }
-      else { if (h > maxDim) { w *= maxDim / h; h = maxDim; } }
-
-      canvas.width = w;
-      canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, w, h);
-
-      // WebP preserves transparency at a fraction of PNG file size
-      state.pendingImageBase64 = canvas.toDataURL('image/webp', 0.8);
-      document.getElementById('upload-preview-img').src = state.pendingImageBase64;
-      document.getElementById('upload-preview-box').classList.remove('hidden');
+      state.rawLoadedImg = img;
+      reprocessLoadedImage();
     };
     img.src = e.target.result;
   };
   reader.readAsDataURL(file);
 }
 
+function reprocessLoadedImage() {
+  const img = state.rawLoadedImg;
+  if (!img) return;
+
+  const removeBlack = document.getElementById('remove-black-bg').checked;
+  const canvas = document.createElement('canvas');
+  const maxDim = 768; // Keeps multi-frame sheets sharp yet fast to load
+  let w = img.width, h = img.height;
+  if (w > maxDim || h > maxDim) {
+    const ratio = Math.min(maxDim / w, maxDim / h);
+    w = Math.round(w * ratio);
+    h = Math.round(h * ratio);
+  }
+
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, w, h);
+
+  if (removeBlack) {
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    for (let i = 0; i < d.length; i += 4) {
+      // Make near-black pixels transparent while keeping dark outlines intact
+      if (d[i] < 16 && d[i + 1] < 16 && d[i + 2] < 16) {
+        d[i + 3] = 0;
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }
+
+  state.pendingImageBase64 = canvas.toDataURL('image/webp', 0.82);
+  document.getElementById('upload-preview-box').classList.remove('hidden');
+  updateAnimatedPreview();
+}
+
+function updateAnimatedPreview() {
+  if (!state.pendingImageBase64) return;
+  const cols = Math.max(1, Number(document.getElementById('sprite-cols').value) || 1);
+  const rows = Math.max(1, Number(document.getElementById('sprite-rows').value) || 1);
+  const box = document.getElementById('animated-sprite-preview');
+
+  box.style.backgroundImage = `url(${state.pendingImageBase64})`;
+  box.style.backgroundSize = `${cols * 100}% ${rows * 100}%`;
+
+  if (state.previewTimer) clearInterval(state.previewTimer);
+  let frame = 0;
+  state.previewTimer = setInterval(() => {
+    const xPct = cols > 1 ? (frame / (cols - 1)) * 100 : 0;
+    box.style.backgroundPosition = `${xPct}% 0%`;
+    frame = (frame + 1) % cols;
+  }, 140);
+}
+
 async function uploadGameAsset() {
   const type = document.getElementById('asset-type').value;
-  const gender = type === 'character' ? document.getElementById('asset-gender').value : 'Any';
+  const rarity = type === 'character' ? document.getElementById('asset-rarity').value : 'Common';
   const floorRule = type !== 'character' ? (document.getElementById('asset-floor').value.trim() || 'all') : 'all';
   const name = document.getElementById('asset-name').value.trim();
+  const cols = Number(document.getElementById('sprite-cols').value) || 1;
+  const rows = Number(document.getElementById('sprite-rows').value) || 1;
 
-  if (!name || !state.pendingImageBase64) return alert("Enter a name and select an image file.");
+  if (!name || !state.pendingImageBase64) return alert("Enter a name and select a sprite image.");
 
   const newAsset = await apiCall({
-    action: 'addGameAsset', type, gender, floorRule, name, imageData: state.pendingImageBase64
+    action: 'addGameAsset', type, rarity, floorRule, name, cols, rows, imageData: state.pendingImageBase64
   });
 
   state.assets.push(newAsset);
   state.pendingImageBase64 = '';
+  state.rawLoadedImg = null;
   document.getElementById('asset-name').value = '';
   document.getElementById('asset-file').value = '';
   document.getElementById('upload-preview-box').classList.add('hidden');
@@ -264,13 +307,13 @@ function renderAssets() {
   document.getElementById('asset-list').innerHTML = state.assets.map(a => `
     <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid #334155;">
       <div style="display:flex; align-items:center; gap:10px;">
-        <img src="${a.imageData}" class="asset-thumb">
+        <div style="width:48px; height:48px; background-image:url(${a.imageData}); background-size:${a.meta.cols * 100}% ${a.meta.rows * 100}%; background-position:0% 0%; background-color:#090d16; border-radius:8px; border:1px solid #475569;"></div>
         <div>
-          <b>${a.name}</b> <span style="font-size:11px; color:var(--gold);">[${a.type.toUpperCase()}]</span>
-          <div style="font-size:11px; color:var(--muted);">${a.type === 'character' ? 'Gender: ' + a.gender : 'Floor: ' + a.floorRule}</div>
+          <b>${a.name}</b> <span style="font-size:11px; color:var(--gold);">[${a.type.toUpperCase()} • ${a.type === 'character' ? a.rarity : 'Floor ' + a.meta.floorRule}]</span>
+          <div style="font-size:11px; color:var(--muted);">Grid: ${a.meta.cols} cols × ${a.meta.rows} rows</div>
         </div>
       </div>
       <button class="btn btn-sm" style="background:#ef4444;" onclick="deleteAsset('${a.assetId}')">Delete</button>
     </div>
-  `).join('') || '<p style="font-size:12px; color:var(--muted);">No custom sprites uploaded yet.</p>';
+  `).join('') || '<p style="font-size:12px; color:var(--muted);">No sprites uploaded yet.</p>';
 }
