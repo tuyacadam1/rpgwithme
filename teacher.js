@@ -197,7 +197,7 @@ function renderEClassRecord() {
   container.innerHTML = html;
 }
 
-// --- SPRITE SHEET PROCESSOR (SHARP + NO-DRIVE) ---
+// --- SPRITE SHEET PROCESSOR (SMOOTH HIGH-RES + NO-DRIVE) ---
 function toggleAssetFields() {
   const type = document.getElementById('asset-type').value;
   document.getElementById('asset-rarity-wrap').classList.toggle('hidden', type !== 'character');
@@ -240,7 +240,8 @@ function reprocessLoadedImage() {
     canvas.width = w;
     canvas.height = h;
     const ctx = canvas.getContext('2d');
-    ctx.imageSmoothingEnabled = false;
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(img, 0, 0, w, h);
 
     if (removeBlack) {
