@@ -9,7 +9,7 @@
 <body>
   <div id="toast">Syncing...</div>
 
-  <!-- LOGIN VIEW -->
+  <!-- LOGIN -->
   <div id="login-view" class="main-content" style="max-width: 400px; margin: auto; display: flex; flex-direction: column; justify-content: center;">
     <div class="card">
       <h2>🍎 Teacher Login</h2>
@@ -19,13 +19,14 @@
     </div>
   </div>
 
-  <!-- DASHBOARD SHELL -->
+  <!-- SHELL -->
   <div id="app-shell" class="app-container hidden">
     <nav class="nav-bar">
       <button class="nav-btn active" onclick="switchTab('classes', this)"><span class="icon">🏫</span>Classes</button>
       <button class="nav-btn" onclick="switchTab('students', this)"><span class="icon">👥</span>Students</button>
       <button class="nav-btn" onclick="switchTab('points', this)"><span class="icon">⭐</span>Points</button>
-      <button class="nav-btn" onclick="switchTab('history', this)"><span class="icon">📋</span>History</button>
+      <button class="nav-btn" onclick="switchTab('history', this)"><span class="icon">📊</span>E-Record</button>
+      <button class="nav-btn" onclick="switchTab('assets', this)"><span class="icon">🐉</span>RPG Studio</button>
     </nav>
 
     <main class="main-content">
@@ -34,7 +35,7 @@
         <select id="active-class-select" style="width:auto; margin:0;" onchange="onClassChange()"></select>
       </div>
 
-      <!-- 1. MANAGE CLASS -->
+      <!-- 1. CLASSES -->
       <section id="tab-classes" class="tab-view">
         <div class="card">
           <h3>Create New Class</h3>
@@ -47,12 +48,12 @@
         </div>
       </section>
 
-      <!-- 2. MANAGE STUDENTS (BULK) -->
+      <!-- 2. STUDENTS -->
       <section id="tab-students" class="tab-view hidden">
         <div class="card">
           <h3>Bulk Add Students</h3>
           <p style="font-size:12px; color:var(--muted); margin-bottom:8px;">Format: <code>StudentID, Full Name</code> (One per line)</p>
-          <textarea id="bulk-student-input" rows="6" placeholder="2026001, Juan Dela Cruz&#10;2026002, Maria Clara"></textarea>
+          <textarea id="bulk-student-input" rows="5" placeholder="2026001, Juan Dela Cruz&#10;2026002, Maria Clara"></textarea>
           <button class="btn" onclick="bulkAddStudents()">Upload Roster</button>
         </div>
         <div class="card">
@@ -61,13 +62,13 @@
         </div>
       </section>
 
-      <!-- 3. MANAGE POINTS (BULK + CHECKLIST) -->
+      <!-- 3. POINTS -->
       <section id="tab-points" class="tab-view hidden">
         <div class="card">
           <h3>Award Task Points</h3>
-          <input type="text" id="task-name" placeholder="Task Name (e.g., Quiz 1, Recitation)">
+          <input type="text" id="task-name" placeholder="Task Name (e.g., Quiz 1, Activity 2)">
           <div class="grid-2">
-            <input type="number" id="task-points" placeholder="Points (e.g., 10)" value="5">
+            <input type="number" id="task-points" placeholder="Points" value="10">
             <button class="btn btn-sm" style="height:40px;" onclick="toggleAllCheckboxes()">Select / Deselect All</button>
           </div>
           <div id="student-checklist" style="max-height: 250px; overflow-y: auto; margin-bottom: 12px;"></div>
@@ -75,15 +76,53 @@
         </div>
       </section>
 
-      <!-- 4. HISTORY / E-CLASS RECORD -->
+      <!-- 4. E-CLASS RECORD (MATRIX) -->
       <section id="tab-history" class="tab-view hidden">
         <div class="card">
           <div style="display:flex; justify-content:space-between; align-items:center;">
-            <h3>E-Class Record</h3>
+            <h3>📊 E-Class Record</h3>
             <button class="btn btn-sm" onclick="loadHistory()">🔄 Refresh</button>
           </div>
-          <input type="text" id="filter-task" placeholder="Filter by Task Name to see who is missing..." onkeyup="renderHistory()">
-          <div id="history-output"></div>
+          <input type="text" id="ecr-search" placeholder="Search student name or ID..." onkeyup="renderEClassRecord()" style="margin-top:8px;">
+          <div class="ecr-wrapper" id="ecr-container"></div>
+        </div>
+      </section>
+
+      <!-- 5. RPG STUDIO (UPLOAD MOBS, BOSSES & CHARACTER DESIGNS) -->
+      <section id="tab-assets" class="tab-view hidden">
+        <div class="card">
+          <h3>🎨 Upload Tower Mobs, Bosses & Hero Designs</h3>
+          <p style="font-size:11px; color:var(--muted); margin-bottom:10px;">Upload transparent PNGs from your device. Images are auto-compressed so students load instantly!</p>
+          
+          <select id="asset-type" onchange="toggleAssetFields()">
+            <option value="mob">Tower Mob (Regular Floors)</option>
+            <option value="boss">Tower Boss (Every 10th Floor)</option>
+            <option value="character">Playable Character Design</option>
+          </select>
+
+          <div id="asset-gender-wrap" class="hidden">
+            <select id="asset-gender">
+              <option value="Male">Male Character Option</option>
+              <option value="Female">Female Character Option</option>
+            </select>
+          </div>
+
+          <div id="asset-floor-wrap">
+            <input type="text" id="asset-floor" placeholder="Floor Rule: 'all' or specific floor e.g. '10', '20'" value="all">
+          </div>
+
+          <input type="text" id="asset-name" placeholder="Name (e.g., Forest Slime, Dragon Lord, Cyber Paladin)">
+          <input type="file" id="asset-file" accept="image/*" onchange="previewCompressedImage(event)">
+          <div id="upload-preview-box" class="hidden" style="text-align:center; margin-bottom:10px;">
+            <img id="upload-preview-img" style="width:96px; height:96px; object-fit:contain; background:#090d16; border-radius:10px; border:1px solid var(--gold);">
+          </div>
+
+          <button class="btn btn-gold" onclick="uploadGameAsset()">Upload to Game</button>
+        </div>
+
+        <div class="card">
+          <h3>Uploaded Sprites (<span id="asset-count">0</span>)</h3>
+          <div id="asset-list"></div>
         </div>
       </section>
     </main>
