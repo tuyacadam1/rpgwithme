@@ -197,7 +197,7 @@ function renderEClassRecord() {
   container.innerHTML = html;
 }
 
-// --- SPRITE SHEET PROCESSOR & LIVE ANIMATION PREVIEW ---
+// --- SPRITE SHEET PROCESSOR (NO-DRIVE COMPRESSION) & LIVE PREVIEW ---
 function toggleAssetFields() {
   const type = document.getElementById('asset-type').value;
   document.getElementById('asset-rarity-wrap').classList.toggle('hidden', type !== 'character');
@@ -224,33 +224,43 @@ function reprocessLoadedImage() {
   if (!img) return;
 
   const removeBlack = document.getElementById('remove-black-bg').checked;
-  const canvas = document.createElement('canvas');
-  const maxDim = 768; // Keeps multi-frame sheets sharp yet fast to load
-  let w = img.width, h = img.height;
-  if (w > maxDim || h > maxDim) {
-    const ratio = Math.min(maxDim / w, maxDim / h);
-    w = Math.round(w * ratio);
-    h = Math.round(h * ratio);
-  }
+  let maxDim = 480;
+  let quality = 0.72;
+  let dataUrl = '';
 
-  canvas.width = w;
-  canvas.height = h;
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0, w, h);
-
-  if (removeBlack) {
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const d = imgData.data;
-    for (let i = 0; i < d.length; i += 4) {
-      // Make near-black pixels transparent while keeping dark outlines intact
-      if (d[i] < 16 && d[i + 1] < 16 && d[i + 2] < 16) {
-        d[i + 3] = 0;
-      }
+  // Automatically shrink dimensions/quality until under Google Sheets 50k cell limit
+  while (maxDim >= 180) {
+    const canvas = document.createElement('canvas');
+    let w = img.width, h = img.height;
+    if (w > maxDim || h > maxDim) {
+      const ratio = Math.min(maxDim / w, maxDim / h);
+      w = Math.round(w * ratio);
+      h = Math.round(h * ratio);
     }
-    ctx.putImageData(imgData, 0, 0);
+
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+
+    if (removeBlack) {
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const d = imgData.data;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i] < 16 && d[i + 1] < 16 && d[i + 2] < 16) {
+          d[i + 3] = 0;
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+
+    dataUrl = canvas.toDataURL('image/webp', quality);
+    if (dataUrl.length < 45000) break;
+    maxDim -= 60;
+    quality -= 0.08;
   }
 
-  state.pendingImageBase64 = canvas.toDataURL('image/webp', 0.82);
+  state.pendingImageBase64 = dataUrl;
   document.getElementById('upload-preview-box').classList.remove('hidden');
   updateAnimatedPreview();
 }
