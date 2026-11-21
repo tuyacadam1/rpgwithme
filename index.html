@@ -19,7 +19,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
     body { background: var(--bg); color: var(--text); min-height: 100vh; padding: 16px; }
     .hidden { display: none !important; }
-    .container { max-width: 1050px; margin: 0 auto; }
+    .container { max-width: 1150px; margin: 0 auto; }
 
     .card {
       background: var(--card);
@@ -151,7 +151,7 @@
       <button class="tab-btn active" onclick="switchTab('tab-points', this)">⭐ Award Points</button>
       <button class="tab-btn" onclick="switchTab('tab-roster', this)">👥 Class Roster</button>
       <button class="tab-btn" onclick="switchTab('tab-assets', this)">🎨 Game Assets</button>
-      <button class="tab-btn" onclick="switchTab('tab-history', this); loadHistory();">📜 Task History</button>
+      <button class="tab-btn" onclick="switchTab('tab-history', this); loadHistory();">📊 E-Class Record</button>
     </div>
 
     <!-- TAB 1: AWARD POINTS -->
@@ -193,7 +193,7 @@
     <!-- TAB 3: GAME ASSETS (GITHUB / VERCEL ASSETS FOLDER) -->
     <div id="tab-assets" class="tab-panel card hidden">
       <h3>🎨 Upload Gacha Characters & Tower Mobs</h3>
-      <p style="margin-bottom: 12px;">Supports single images OR multi-row sprite sheets (e.g. 6 cols × 3 rows for Idle/Attack animations) hosted in your <code>assets/</code> folder[cite: 4].</p>
+      <p style="margin-bottom: 12px;">Supports single images OR multi-row sprite sheets (e.g. 6 cols × 3 rows for Idle/Attack animations) hosted in your <code>assets/</code> folder.</p>
 
       <label>Asset Type</label>
       <select id="asset-type" onchange="toggleAssetFields()">
@@ -245,10 +245,21 @@
       <div id="assets-list"></div>
     </div>
 
-    <!-- TAB 4: HISTORY -->
+    <!-- TAB 4: E-CLASS RECORD MATRIX -->
     <div id="tab-history" class="tab-panel card hidden">
-      <h3>📜 Credited Task & Points History</h3>
-      <div id="history-list"></div>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+        <div>
+          <h3>📊 E-Class Record & Missing Work Tracker</h3>
+          <p>Green = Credited • Red = Missing Task • Ignores initial "Enrolled" bonus logs</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-outline" style="padding:7px 12px; font-size:12px;" onclick="loadHistory()">🔄 Refresh Record</button>
+          <button class="btn btn-green" style="padding:7px 12px; font-size:12px;" onclick="exportClassRecordCSV()">📥 Export CSV</button>
+        </div>
+      </div>
+
+      <div id="history-summary" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:12px;"></div>
+      <div id="history-list" style="overflow-x:auto; border:1px solid #1e293b; border-radius:10px;"></div>
     </div>
   </div>
 
