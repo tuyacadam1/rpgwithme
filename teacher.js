@@ -11,6 +11,8 @@ const state = {
   previewTimer: null
 };
 
+let cachedRecordMatrix = null;
+
 function showToast(msg, isError = false) {
   const t = document.getElementById('toast');
   t.innerText = msg;
@@ -79,6 +81,9 @@ function renderClassDropdown() {
 function onClassChange() {
   state.selectedClassId = document.getElementById('class-select').value;
   renderClassStudents();
+  if (!document.getElementById('tab-history').classList.contains('hidden')) {
+    loadHistory();
+  }
 }
 
 async function createNewClass() {
@@ -105,7 +110,11 @@ function switchTab(tabId, btn) {
 
 // --- ROSTER & POINTS ---
 function renderClassStudents() {
-  const list = state.students.filter(s => String(s.classId) === String(state.selectedClassId));
+  const list = state.students
+    .filter(s => String(s.classId) === String(state.selectedClassId))
+    .slice()
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
   document.getElementById('roster-count').innerText = list.length;
 
   const pointsContainer = document.getElementById('points-student-list');
@@ -257,7 +266,7 @@ function updateAnimatedPreview() {
     const yPct = rows > 1 ? 6 : 0;
     box.style.backgroundPosition = `${xPct}% ${yPct}%`;
     frame = (frame + 1) % cols;
-  }, 140);
+  }, 180);
 }
 
 async function uploadGameAsset() {
@@ -331,24 +340,151 @@ async function deleteGameAsset(assetId) {
   renderAssets();
 }
 
-// --- HISTORY ---
+// --- E-CLASS RECORD MATRIX & CSV EXPORT ---
 async function loadHistory() {
   if (!state.selectedClassId) return;
-  const logs = await apiCall({ action: 'getHistory', classId: state.selectedClassId });
   const container = document.getElementById('history-list');
+  const summaryBox = document.getElementById('history-summary');
+  container.innerHTML = '<p style="text-align:center; padding:20px;">Building E-Class Record...</p>';
 
-  if (!logs || logs.length === 0) {
-    container.innerHTML = '<p style="text-align:center; padding:16px;">No points awarded yet in this class.</p>';
+  const logs = await apiCall({ action: 'getHistory', classId: state.selectedClassId });
+  const roster = state.students
+    .filter(s => String(s.classId) === String(state.selectedClassId))
+    .slice()
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+  if (roster.length === 0) {
+    summaryBox.innerHTML = '';
+    container.innerHTML = '<p style="text-align:center; padding:20px;">No students in this class yet.</p>';
     return;
   }
 
-  container.innerHTML = logs.slice().reverse().map(l => `
-    <div class="student-row">
-      <div>
-        <div style="font-weight:700; font-size:13px;">${l.studentName} <span style="color:#94a3b8; font-weight:400;">(${l.studentId})</span></div>
-        <div style="font-size:11px; color:#60a5fa;">${l.taskName} • ${l.date}</div>
-      </div>
-      <span style="color:#10b981; font-weight:800;">+${l.points} Pts</span>
+  const taskMap = new Map();
+  (logs || []).forEach(l => {
+    const tName = String(l.taskName || '').trim();
+    if (!tName || tName.toLowerCase() === 'enrolled') return;
+    if (!taskMap.has(tName)) {
+      taskMap.set(tName, { taskName: tName, maxPts: Number(l.points) || 0, date: l.date });
+    }
+  });
+
+  const tasks = Array.from(taskMap.values());
+
+  const studentScores = {};
+  (logs || []).forEach(l => {
+    const sId = String(l.studentId);
+    const tName = String(l.taskName || '').trim();
+    if (!tName || tName.toLowerCase() === 'enrolled') return;
+    if (!studentScores[sId]) studentScores[sId] = {};
+    studentScores[sId][tName] = (studentScores[sId][tName] || 0) + (Number(l.points) || 0);
+  });
+
+  cachedRecordMatrix = { roster, tasks, studentScores };
+
+  if (tasks.length === 0) {
+    summaryBox.innerHTML = '';
+    container.innerHTML = '<p style="text-align:center; padding:20px;">No tasks recorded yet. Award points in the ⭐ Award Points tab to generate task columns.</p>';
+    return;
+  }
+
+  let totalMissingCount = 0;
+  roster.forEach(s => {
+    tasks.forEach(t => {
+      if (!studentScores[String(s.studentId)]?.[t.taskName]) totalMissingCount++;
+    });
+  });
+
+  summaryBox.innerHTML = `
+    <div style="background:#090d16; border:1px solid #1e293b; padding:8px 14px; border-radius:8px; font-size:12px;">
+      👥 Students: <strong style="color:#38bdf8;">${roster.length}</strong>
     </div>
-  `).join('');
+    <div style="background:#090d16; border:1px solid #1e293b; padding:8px 14px; border-radius:8px; font-size:12px;">
+      📝 Total Tasks: <strong style="color:#f59e0b;">${tasks.length}</strong>
+    </div>
+    <div style="background:#090d16; border:1px solid #7f1d1d; padding:8px 14px; border-radius:8px; font-size:12px;">
+      ⚠️ Missing Entries: <strong style="color:#f87171;">${totalMissingCount}</strong>
+    </div>
+  `;
+
+  const thStyle = 'padding:10px 12px; text-align:left; background:#090d16; color:#f59e0b; font-size:12px; border-bottom:1px solid #334155; white-space:nowrap;';
+  const tdStyle = 'padding:9px 12px; border-bottom:1px solid #1e293b; font-size:12px; white-space:nowrap;';
+
+  const headerHtml = `
+    <tr>
+      <th style="${thStyle} position:sticky; left:0; z-index:2;">Student Name (ID)</th>
+      ${tasks.map(t => `<th style="${thStyle} text-align:center;">${t.taskName}<br><span style="font-size:10px; color:#94a3b8; font-weight:400;">(${t.maxPts} Pts)</span></th>`).join('')}
+      <th style="${thStyle} text-align:center;">Missing</th>
+      <th style="${thStyle} text-align:right;">Total Pts</th>
+    </tr>
+  `;
+
+  const rowsHtml = roster.map(s => {
+    const sId = String(s.studentId);
+    const scores = studentScores[sId] || {};
+    let missingCount = 0;
+    let taskSum = 0;
+
+    const cells = tasks.map(t => {
+      const earned = scores[t.taskName];
+      if (earned !== undefined) {
+        taskSum += earned;
+        return `<td style="${tdStyle} text-align:center; color:#4ade80; font-weight:700;">✓ +${earned}</td>`;
+      } else {
+        missingCount++;
+        return `<td style="${tdStyle} text-align:center;"><span style="background:rgba(239,68,68,0.18); color:#f87171; border:1px solid #991b1b; padding:2px 7px; border-radius:6px; font-size:10px; font-weight:800;">MISSING</span></td>`;
+      }
+    }).join('');
+
+    return `
+      <tr style="background:${missingCount > 0 ? 'rgba(127,29,29,0.08)' : 'transparent'};">
+        <td style="${tdStyle} position:sticky; left:0; background:#131b2e; font-weight:700;">
+          ${s.name} <span style="color:#94a3b8; font-weight:400;">(${sId})</span>
+        </td>
+        ${cells}
+        <td style="${tdStyle} text-align:center; font-weight:800; color:${missingCount > 0 ? '#f87171' : '#4ade80'};">
+          ${missingCount > 0 ? `${missingCount} Missing` : 'Complete'}
+        </td>
+        <td style="${tdStyle} text-align:right; font-weight:800; color:#f59e0b;">${taskSum} Pts</td>
+      </tr>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>${headerHtml}</thead>
+      <tbody>${rowsHtml}</tbody>
+    </table>
+  `;
+}
+
+function exportClassRecordCSV() {
+  if (!cachedRecordMatrix || cachedRecordMatrix.tasks.length === 0) {
+    return alert("No E-Class Record data to export yet.");
+  }
+  const { roster, tasks, studentScores } = cachedRecordMatrix;
+  const headers = ['Student ID', 'Student Name', ...tasks.map(t => `${t.taskName} (${t.maxPts} Pts)`), 'Missing Count', 'Total Task Pts'];
+  const rows = [headers.join(',')];
+
+  roster.forEach(s => {
+    const sId = String(s.studentId);
+    const scores = studentScores[sId] || {};
+    let missing = 0;
+    let total = 0;
+    const vals = tasks.map(t => {
+      if (scores[t.taskName] !== undefined) {
+        total += scores[t.taskName];
+        return scores[t.taskName];
+      } else {
+        missing++;
+        return 'MISSING';
+      }
+    });
+    rows.push([`"${sId}"`, `"${s.name}"`, ...vals, missing, total].join(','));
+  });
+
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = `EClass_Record_${state.selectedClassId}.csv`;
+  link.click();
 }
