@@ -3,6 +3,7 @@ const ASSETS_BASE_URL = "https://rpgwithme2.vercel.app/assets/";
 
 const state = {
   teacherId: '',
+  token: '',
   classes: [],
   students: [],
   assets: [],
@@ -28,9 +29,13 @@ function hideToast() {
 async function apiCall(payload) {
   showToast("Syncing with server...");
   try {
+    const requestBody = payload.action === 'teacherLogin'
+      ? payload
+      : { ...payload, teacherId: state.teacherId, token: state.token };
+
     const res = await fetch(API_URL, {
       method: 'POST',
-      body: JSON.stringify(payload)
+      body: JSON.stringify(requestBody)
     });
     const json = await res.json();
     hideToast();
@@ -51,6 +56,7 @@ async function teacherLogin() {
 
   const data = await apiCall({ action: 'teacherLogin', teacherId, password });
   state.teacherId = teacherId;
+  state.token = data.token || '';
   state.classes = data.classes || [];
   state.students = data.students || [];
   state.assets = data.assets || [];
@@ -92,7 +98,6 @@ async function createNewClass() {
 
   const newCls = await apiCall({
     action: 'addClass',
-    teacherId: state.teacherId,
     className: className.trim()
   });
 
@@ -222,7 +227,7 @@ async function bulkAddStudents() {
   alert(`✅ Added ${res.added} new students!`);
 }
 
-// --- GAME ASSETS (ASSETS FOLDER / URL WORKFLOW) ---
+// --- GAME ASSETS (ASSETS FOLDER / URL WORKFLOW WITH AUTO-.PNG & VERIFIER) ---
 function toggleAssetFields() {
   const type = document.getElementById('asset-type').value;
   document.getElementById('rarity-field').classList.toggle('hidden', type !== 'character');
@@ -233,7 +238,11 @@ function resolveAssetUrl(rawInput) {
   const val = rawInput.trim();
   if (!val) return '';
   if (val.startsWith('http://') || val.startsWith('https://')) return val;
-  const cleanFile = val.replace(/^\/?assets\//i, '');
+
+  let cleanFile = val.replace(/^\/?assets\//i, '');
+  if (!/\.(png|jpg|jpeg|gif|webp|svg)$/i.test(cleanFile)) {
+    cleanFile += '.png';
+  }
   return ASSETS_BASE_URL + cleanFile;
 }
 
@@ -256,17 +265,27 @@ function updateAnimatedPreview() {
   const rows = Math.max(1, Number(document.getElementById('sprite-rows').value) || 1);
   const box = document.getElementById('animated-sprite-preview');
 
-  box.style.backgroundImage = `url(${state.pendingImageUrl})`;
-  box.style.backgroundSize = rows > 1 ? `${cols * 100}% ${rows * 128}%` : `${cols * 100}% 100%`;
+  const testImg = new Image();
+  testImg.onload = () => {
+    box.innerText = '';
+    box.style.backgroundImage = `url(${state.pendingImageUrl})`;
+    box.style.backgroundSize = rows > 1 ? `${cols * 100}% ${rows * 128}%` : `${cols * 100}% 100%`;
 
-  if (state.previewTimer) clearInterval(state.previewTimer);
-  let frame = 0;
-  state.previewTimer = setInterval(() => {
-    const xPct = cols > 1 ? (frame / (cols - 1)) * 100 : 0;
-    const yPct = rows > 1 ? 6 : 0;
-    box.style.backgroundPosition = `${xPct}% ${yPct}%`;
-    frame = (frame + 1) % cols;
-  }, 180);
+    if (state.previewTimer) clearInterval(state.previewTimer);
+    let frame = 0;
+    state.previewTimer = setInterval(() => {
+      const xPct = cols > 1 ? (frame / (cols - 1)) * 100 : 0;
+      const yPct = rows > 1 ? 6 : 0;
+      box.style.backgroundPosition = `${xPct}% ${yPct}%`;
+      frame = (frame + 1) % cols;
+    }, 180);
+  };
+  testImg.onerror = () => {
+    if (state.previewTimer) clearInterval(state.previewTimer);
+    box.style.backgroundImage = 'none';
+    box.innerHTML = `<div style="color:#f87171; font-size:11px; padding-top:26px;">❌ File not found:<br><span style="color:#94a3b8;">${state.pendingImageUrl.split('/').pop()}</span></div>`;
+  };
+  testImg.src = state.pendingImageUrl;
 }
 
 async function uploadGameAsset() {
@@ -278,7 +297,7 @@ async function uploadGameAsset() {
   const rows = Number(document.getElementById('sprite-rows').value) || 1;
 
   if (!name || !state.pendingImageUrl) {
-    return alert("Enter a name and the sprite filename inside your assets/ folder (e.g., asta.png).");
+    return alert("Enter a name and the sprite filename inside your assets/ folder (e.g., light.png).");
   }
 
   const newAsset = await apiCall({
