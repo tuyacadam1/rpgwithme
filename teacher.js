@@ -176,7 +176,30 @@ function renderClassStudents() {
     </div>
   `).join('');
 }
+async function resetStudentPin(studentId, studentName) {
+  const newPin = prompt(
+    `Reset PIN for ${studentName} (${studentId}):\n\n` +
+    `• Enter a new 4+ digit PIN (e.g., 1234), OR\n` +
+    `• Leave BLANK and click OK to let the student set their own new PIN on next login:`
+  );
+  if (newPin === null) return; // Teacher clicked Cancel
 
+  const cleanPin = newPin.trim();
+  await apiCall({
+    action: 'resetStudentPin',
+    studentId: studentId,
+    pin: cleanPin
+  });
+
+  const target = state.students.find(s => String(s.studentId) === String(studentId));
+  if (target) target.pin = cleanPin;
+  renderClassStudents();
+
+  alert(cleanPin
+    ? `✅ PIN for ${studentName} reset to: ${cleanPin}`
+    : `✅ PIN cleared! ${studentName} will set a new PIN on their next login.`
+  );
+}
 function toggleSelectAll(checked) {
   document.querySelectorAll('.pts-check').forEach(cb => { cb.checked = checked; });
 }
