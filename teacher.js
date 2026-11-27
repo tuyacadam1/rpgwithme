@@ -161,9 +161,18 @@ function renderClassStudents() {
     <div class="student-row">
       <div>
         <div style="font-weight:700; font-size:14px;">${escHtml(s.name)}</div>
-        <div style="font-size:11px; color:#94a3b8;">ID: ${escHtml(s.studentId)} • Floor ${Number(s.floor) || 1}</div>
+        <div style="font-size:11px; color:#94a3b8;">
+          ID: ${escHtml(s.studentId)} • Floor ${Number(s.floor) || 1} • 
+          PIN: <strong style="color:${s.pin ? '#4ade80' : '#f87171'};">${s.pin ? escHtml(s.pin) : 'Not Set'}</strong>
+        </div>
       </div>
-      <span style="color:#38bdf8; font-weight:700; font-size:13px;">★ ${Number(s.points) || 0} Pts</span>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="color:#38bdf8; font-weight:700; font-size:13px;">★ ${Number(s.points) || 0} Pts</span>
+        <button class="btn btn-outline" style="padding:5px 10px; font-size:11px; border-color:#f59e0b; color:#f59e0b;" 
+          onclick="resetStudentPin('${escHtml(s.studentId)}', '${escHtml(s.name)}')">
+          🔑 Reset PIN
+        </button>
+      </div>
     </div>
   `).join('');
 }
