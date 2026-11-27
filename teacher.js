@@ -14,6 +14,16 @@ const state = {
 
 let cachedRecordMatrix = null;
 
+function escHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  }[c]));
+}
+
 function showToast(msg, isError = false) {
   const t = document.getElementById('toast');
   t.innerText = msg;
@@ -35,6 +45,7 @@ async function apiCall(payload) {
 
     const res = await fetch(API_URL, {
       method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(requestBody)
     });
     const json = await res.json();
@@ -55,7 +66,7 @@ async function teacherLogin() {
   if (!teacherId || !password) return alert("Enter Teacher ID and Password.");
 
   const data = await apiCall({ action: 'teacherLogin', teacherId, password });
-  state.teacherId = teacherId;
+  state.teacherId = data.teacherId || teacherId;
   state.token = data.token || '';
   state.classes = data.classes || [];
   state.students = data.students || [];
@@ -75,7 +86,9 @@ function renderClassDropdown() {
     sel.innerHTML = '<option value="">No Classes Yet</option>';
     state.selectedClassId = '';
   } else {
-    sel.innerHTML = state.classes.map(c => `<option value="${c.classId}">${c.className}</option>`).join('');
+    sel.innerHTML = state.classes
+      .map(c => `<option value="${escHtml(c.classId)}">${escHtml(c.className)}</option>`)
+      .join('');
     if (!state.selectedClassId || !state.classes.some(c => c.classId === state.selectedClassId)) {
       state.selectedClassId = state.classes[0].classId;
     }
@@ -134,23 +147,23 @@ function renderClassStudents() {
   pointsContainer.innerHTML = list.map(s => `
     <label class="student-row" style="cursor:pointer;">
       <div style="display:flex; align-items:center; gap:10px;">
-        <input type="checkbox" class="pts-check" value="${s.studentId}" style="width:18px; height:18px; margin:0;">
+        <input type="checkbox" class="pts-check" value="${escHtml(s.studentId)}" style="width:18px; height:18px; margin:0;">
         <div>
-          <div style="font-weight:700; color:#f8fafc; font-size:14px;">${s.name}</div>
-          <div style="font-size:11px; color:#94a3b8;">ID: ${s.studentId} • Floor ${s.floor || 1}</div>
+          <div style="font-weight:700; color:#f8fafc; font-size:14px;">${escHtml(s.name)}</div>
+          <div style="font-size:11px; color:#94a3b8;">ID: ${escHtml(s.studentId)} • Floor ${Number(s.floor) || 1}</div>
         </div>
       </div>
-      <span style="color:#f59e0b; font-weight:800; font-size:13px;">★ ${s.points || 0} Pts</span>
+      <span style="color:#f59e0b; font-weight:800; font-size:13px;">★ ${Number(s.points) || 0} Pts</span>
     </label>
   `).join('');
 
   rosterContainer.innerHTML = list.map(s => `
     <div class="student-row">
       <div>
-        <div style="font-weight:700; font-size:14px;">${s.name}</div>
-        <div style="font-size:11px; color:#94a3b8;">ID: ${s.studentId} • Floor ${s.floor || 1}</div>
+        <div style="font-weight:700; font-size:14px;">${escHtml(s.name)}</div>
+        <div style="font-size:11px; color:#94a3b8;">ID: ${escHtml(s.studentId)} • Floor ${Number(s.floor) || 1}</div>
       </div>
-      <span style="color:#38bdf8; font-weight:700; font-size:13px;">★ ${s.points || 0} Pts</span>
+      <span style="color:#38bdf8; font-weight:700; font-size:13px;">★ ${Number(s.points) || 0} Pts</span>
     </div>
   `).join('');
 }
@@ -268,7 +281,7 @@ function updateAnimatedPreview() {
   const testImg = new Image();
   testImg.onload = () => {
     box.innerText = '';
-    box.style.backgroundImage = `url(${state.pendingImageUrl})`;
+    box.style.backgroundImage = `url("${encodeURI(state.pendingImageUrl)}")`;
     box.style.backgroundSize = rows > 1 ? `${cols * 100}% ${rows * 128}%` : `${cols * 100}% 100%`;
 
     if (state.previewTimer) clearInterval(state.previewTimer);
@@ -283,7 +296,7 @@ function updateAnimatedPreview() {
   testImg.onerror = () => {
     if (state.previewTimer) clearInterval(state.previewTimer);
     box.style.backgroundImage = 'none';
-    box.innerHTML = `<div style="color:#f87171; font-size:11px; padding-top:26px;">❌ File not found:<br><span style="color:#94a3b8;">${state.pendingImageUrl.split('/').pop()}</span></div>`;
+    box.innerHTML = `<div style="color:#f87171; font-size:11px; padding-top:26px;">❌ File not found:<br><span style="color:#94a3b8;">${escHtml(state.pendingImageUrl.split('/').pop())}</span></div>`;
   };
   testImg.src = state.pendingImageUrl;
 }
@@ -329,24 +342,25 @@ function renderAssets() {
   }
 
   container.innerHTML = state.assets.map(a => {
-    const cols = Math.max(1, a.meta?.cols || 1);
-    const rows = Math.max(1, a.meta?.rows || 1);
+    const cols = Math.max(1, Number(a.meta?.cols) || 1);
+    const rows = Math.max(1, Number(a.meta?.rows) || 1);
     const bgSize = rows > 1 ? `${cols * 100}% ${rows * 128}%` : `${cols * 100}% 100%`;
     const bgPos = rows > 1 ? '0% 6%' : '0% 0%';
+    const safeUrl = /^https?:\/\//i.test(String(a.imageData || '')) ? encodeURI(a.imageData) : '';
     const tag = a.type === 'character'
-      ? `[CHARACTER • ${a.rarity}]`
-      : `[${a.type.toUpperCase()} • Floor: ${a.meta?.floorRule || 'all'}]`;
+      ? `[CHARACTER • ${escHtml(a.rarity)}]`
+      : `[${escHtml(String(a.type).toUpperCase())} • Floor: ${escHtml(a.meta?.floorRule || 'all')}]`;
 
     return `
       <div class="asset-item">
         <div style="display:flex; align-items:center; gap:12px;">
-          <div class="asset-thumb" style="background-image:url(${a.imageData}); background-size:${bgSize}; background-position:${bgPos};"></div>
+          <div class="asset-thumb" style="background-image:url('${escHtml(safeUrl)}'); background-size:${bgSize}; background-position:${bgPos};"></div>
           <div>
-            <div style="font-weight:800; font-size:14px;">${a.name} <span style="font-size:11px; color:#f59e0b;">${tag}</span></div>
+            <div style="font-weight:800; font-size:14px;">${escHtml(a.name)} <span style="font-size:11px; color:#f59e0b;">${tag}</span></div>
             <div style="font-size:11px; color:#94a3b8;">Grid: ${cols} cols × ${rows} rows</div>
           </div>
         </div>
-        <button class="btn btn-red" onclick="deleteGameAsset('${a.assetId}')">Delete</button>
+        <button class="btn btn-red" onclick="deleteGameAsset('${escHtml(a.assetId)}')">Delete</button>
       </div>
     `;
   }).join('');
@@ -431,7 +445,7 @@ async function loadHistory() {
   const headerHtml = `
     <tr>
       <th style="${thStyle} position:sticky; left:0; z-index:2;">Student Name (ID)</th>
-      ${tasks.map(t => `<th style="${thStyle} text-align:center;">${t.taskName}<br><span style="font-size:10px; color:#94a3b8; font-weight:400;">(${t.maxPts} Pts)</span></th>`).join('')}
+      ${tasks.map(t => `<th style="${thStyle} text-align:center;">${escHtml(t.taskName)}<br><span style="font-size:10px; color:#94a3b8; font-weight:400;">(${Number(t.maxPts) || 0} Pts)</span></th>`).join('')}
       <th style="${thStyle} text-align:center;">Missing</th>
       <th style="${thStyle} text-align:right;">Total Pts</th>
     </tr>
@@ -457,7 +471,7 @@ async function loadHistory() {
     return `
       <tr style="background:${missingCount > 0 ? 'rgba(127,29,29,0.08)' : 'transparent'};">
         <td style="${tdStyle} position:sticky; left:0; background:#131b2e; font-weight:700;">
-          ${s.name} <span style="color:#94a3b8; font-weight:400;">(${sId})</span>
+          ${escHtml(s.name)} <span style="color:#94a3b8; font-weight:400;">(${escHtml(sId)})</span>
         </td>
         ${cells}
         <td style="${tdStyle} text-align:center; font-weight:800; color:${missingCount > 0 ? '#f87171' : '#4ade80'};">
@@ -498,7 +512,7 @@ function exportClassRecordCSV() {
         return 'MISSING';
       }
     });
-    rows.push([`"${sId}"`, `"${s.name}"`, ...vals, missing, total].join(','));
+    rows.push([`"${sId.replace(/"/g, '""')}"`, `"${String(s.name).replace(/"/g, '""')}"`, ...vals, missing, total].join(','));
   });
 
   const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
