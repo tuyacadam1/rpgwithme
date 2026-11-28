@@ -1,5 +1,5 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbxPN7yKyqOwyyxIarj2BTkIcuMOomlfc52zCo2vK4AcVWg8TRofqKaRR-kj1yKiLiENWA/exec";
-const ASSETS_BASE_URL = "https://rpgwithme2.vercel.app/assets/";
+const ASSETS_BASE_URL = "https://rpgwithme2.2107209.workers.dev/assets/";
 
 const state = {
   teacherId: '',
